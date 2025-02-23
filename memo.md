@@ -1,0 +1,1 @@
+https://github.com/capnproto/capnproto-rust/issues/143
