@@ -6,8 +6,9 @@ use futures::AsyncReadExt;
 use std::path::Path;
 use tokio::fs;
 use tokio::net::UnixListener;
-
-struct HelloWorldImpl;
+use tokio::sync::mpsc;
+use std::thread;
+struct HelloWorldImpl{tx: mpsc::Sender<String>}
 
 impl hello_world::Server for HelloWorldImpl {
     fn say_hello(
@@ -17,14 +18,20 @@ impl hello_world::Server for HelloWorldImpl {
     ) -> Promise<(), ::capnp::Error> {
         let request = pry!(pry!(params.get()).get_request());
         let name = pry!(pry!(request.get_name()).to_str());
-        let message = format!("Hello, {name}!");
-        results.get().init_reply().set_message(message);
+        let tid = thread::current().id();
+        let message = format!("Hello, {}! TID={:?}", name, tid);
+        results.get().init_reply().set_message(message.clone());
 
-        Promise::ok(())
+        //self.tx.send(message.to_string()).await.unwrap();
+        let tx = self.tx.clone();
+        Promise::<(), ::capnp::Error>::from_future(async move {
+            let _ = tx.send(message).await;
+            Ok(())
+        })
     }
 }
 
-pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn main(tx: mpsc::Sender<String>) -> Result<(), Box<dyn std::error::Error>> {
     let socket_path = "/tmp/hello_world.sock";
 
     // 既にソケットが存在していたら削除
@@ -33,7 +40,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let listener = UnixListener::bind(socket_path)?;
-    let hello_world_client: hello_world::Client = capnp_rpc::new_client(HelloWorldImpl);
+    let hello_world_client: hello_world::Client = capnp_rpc::new_client(HelloWorldImpl{tx: tx.clone()});
 
     tokio::task::LocalSet::new()
         .run_until(async move {

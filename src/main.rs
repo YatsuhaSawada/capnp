@@ -26,25 +26,19 @@ pub mod hello_world_capnp {
 pub mod client;
 pub mod http_server;
 pub mod server;
+pub mod message;
 
+use tokio::sync::mpsc;
+use crate::message::receive_messages;
 //#[tokio::main(flavor = "current_thread")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // let args: Vec<String> = ::std::env::args().collect();
-    // if args.len() >= 2 {
-    //     match &args[1][..] {
-    //         "client" => return client::main().await,
-    //         "server" => return server::main().await,
-    //         _ => (),
-    //     }
-    // }
 
-    // println!("usage: {} [client | server] ADDRESS", args[0]);
+    let (tx, mut rx) = mpsc::channel(32);
 
-    //let _ = server::main().await;
-    //let _ = http_server::start().await;
+    let handle = tokio::spawn(receive_messages(rx));
 
-    let (_, _) = tokio::join!(server::main(), http_server::start());
+    let (_, _, _) = tokio::join!(server::main(tx.clone()), http_server::start(tx.clone()), handle);
 
     Ok(())
 }
