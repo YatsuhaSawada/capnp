@@ -170,6 +170,7 @@ dependencies = [
  "capnp-rpc",
  "capnpc",
  "futures",
+ "once_cell",
  "tokio",
  "tokio-util",
 ]
