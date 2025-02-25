@@ -197,3 +197,113 @@ fn main() {
         tokio::task::spawn_local(rpc_system.map_err(|e| eprintln!("rpc error: {:?}", e)));
     });
 }*/
+
+/*
+use tokio::runtime::Runtime;
+use tokio::task::LocalSet;
+use tokio::time::{sleep, Duration};
+use capnp::capability::Promise;
+use capnp_rpc::{rpc_twoparty_capnp, twoparty, RpcSystem};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+pub struct ClientImpl {
+    local: LocalSet,
+    rt: Arc<Runtime>,
+}
+
+impl ClientImpl {
+    pub fn new(rt: Arc<Runtime>, local: LocalSet) -> Self {
+        ClientImpl { local, rt }
+    }
+
+    async fn async_read(&self) {
+        // 別crateのLocalでしか実行できない関数を呼び出す
+        println!("Reading data in the LocalSet");
+        sleep(Duration::from_secs(1)).await;
+        println!("Read completed");
+    }
+
+    async fn async_write(&self) {
+        // 別crateのLocalでしか実行できない関数を呼び出す
+        println!("Writing data in the LocalSet");
+        sleep(Duration::from_secs(1)).await;
+        println!("Write completed");
+    }
+
+    pub async fn read(&self) {
+        self.local.run_until(async {
+            tokio::task::spawn_local(async {
+                self.async_read().await;
+            }).await.unwrap();
+        }).await;
+    }
+
+    pub async fn write(&self) {
+        self.local.run_until(async {
+            tokio::task::spawn_local(async {
+                self.async_write().await;
+            }).await.unwrap();
+        }).await;
+    }
+}
+
+struct Client {
+    client: Arc<Mutex<ClientImpl>>,
+}
+
+impl client_capnp::client::Server for Client {
+    fn read(
+        &mut self,
+        _params: client_capnp::client::ReadParams,
+        mut results: client_capnp::client::ReadResults,
+    ) -> Promise<(), capnp::Error> {
+        let client = self.client.clone();
+        Promise::from_future(async move {
+            client.lock().await.read().await;
+            Ok(())
+        })
+    }
+
+    fn write(
+        &mut self,
+        _params: client_capnp::client::WriteParams,
+        mut results: client_capnp::client::WriteResults,
+    ) -> Promise<(), capnp::Error> {
+        let client = self.client.clone();
+        Promise::from_future(async move {
+            client.lock().await.write().await;
+            Ok(())
+        })
+    }
+}
+
+fn main() {
+    // Create a new runtime
+    let rt = Arc::new(Runtime::new().unwrap());
+
+    // Create a new LocalSet
+    let local = LocalSet::new();
+
+    let client_impl = Arc::new(Mutex::new(ClientImpl::new(rt.clone(), local)));
+
+    // Cap'n Protoのサーバに接続してリクエストを処理する
+    rt.block_on(async {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:4000").await.unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let (reader, writer) = tokio_util::compat::TokioAsyncReadCompatExt::compat(stream).split();
+
+        let network = twoparty::VatNetwork::new(
+            reader,
+            writer,
+            rpc_twoparty_capnp::Side::Server,
+            Default::default(),
+        );
+
+        let client = Client { client: client_impl };
+
+        let rpc_system = RpcSystem::new(Box::new(network), Some(client.clone().client));
+
+        tokio::task::spawn_local(rpc_system.map_err(|e| eprintln!("rpc error: {:?}", e))).await.unwrap();
+    });
+}*/
